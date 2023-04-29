@@ -49,6 +49,22 @@ func fetchVersionPage(webPage string) *goquery.Document {
 
 }
 
+func getValidData(allVersionData []versionData) []versionData {
+	numberOfDays := 10
+	validData := []versionData{}
+	now := time.Now()
+
+	for _, data := range allVersionData {
+		dayDifference := now.Sub(data.releaseDate).Hours() / 24
+
+		if numberOfDays > int(dayDifference) {
+			validData = append(validData, data)
+		}
+	}
+
+	return validData
+}
+
 // Get all version numbers from the first page
 // func getVersionNumbers () []string {
 
@@ -115,10 +131,10 @@ func main() {
 		allVersionData = append(allVersionData, data)
 	}
 
-	for _, data := range allVersionData {
+	validData := getValidData(allVersionData)
 
-		// fmt.Println(data.version, data.releaseDate)
-		fmt.Println(data)
+	for _, data := range validData {
+		fmt.Println(data.version, data.releaseDate)
 	}
 
 }
