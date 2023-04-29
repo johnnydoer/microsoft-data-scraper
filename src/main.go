@@ -18,6 +18,8 @@ type versionData struct {
 
 var wg = sync.WaitGroup{}
 
+var validData = []versionData{}
+
 // Load the webpage in HTML format.
 func fetchVersionPage(webPage string) *goquery.Document {
 	// Request the webpage and get the response.
@@ -39,22 +41,6 @@ func fetchVersionPage(webPage string) *goquery.Document {
 	}
 
 	return doc
-}
-
-func getValidData(allVersionData []versionData) []versionData {
-	numberOfDays := 10
-	validData := []versionData{}
-	now := time.Now()
-
-	for _, data := range allVersionData {
-		dayDifference := now.Sub(data.releaseDate).Hours() / 24
-
-		if numberOfDays > int(dayDifference) {
-			validData = append(validData, data)
-		}
-	}
-
-	return validData
 }
 
 // Get all version numbers from the first page
@@ -138,6 +124,21 @@ func getReleaseDates(version string, c chan versionData) {
 	// fmt.Println("GoRoutine for version:", version) // DEBUG
 }
 
+func getValidData(c chan versionData) {
+	numberOfDays := 10
+
+	now := time.Now()
+
+	data := <-c
+	dayDifference := now.Sub(data.releaseDate).Hours() / 24
+
+	if numberOfDays > int(dayDifference) {
+		validData = append(validData, data)
+	}
+
+	wg.Done()
+}
+
 func main() {
 	// Request the webpage and get the response.
 	doc := getFirstPage()
@@ -147,15 +148,17 @@ func main() {
 	fmt.Println("First Page done.")
 
 	//
-	allVersionData := []versionData{}
+	// allVersionData := []versionData{}
 
 	// Channel to communicate all version data in.
-	versionDatach := make(chan versionData, len(versions))
+	versionDatach := make(chan versionData)
 
 	// Loop over the versions from 1st page to get the release dates and save all the data.
 	for _, version := range versions {
-		wg.Add(1)
+		wg.Add(2)
 		go getReleaseDates(version, versionDatach)
+		go getValidData(versionDatach)
+
 	}
 	// fmt.Println("Versions loop done.") // DEBUG
 
@@ -164,14 +167,13 @@ func main() {
 
 	// fmt.Println("Waiting done.") // DEBUG
 
-	for vData := range versionDatach {
-		allVersionData = append(allVersionData, vData)
-	}
-
-	validData := getValidData(allVersionData)
+	/*	for vData := range versionDatach {
+			allVersionData = append(allVersionData, vData)
+		}
+	*/
+	// validData := getValidData(allVersionData)
 
 	for _, data := range validData {
 		fmt.Println(data.version, data.releaseDate)
 	}
 }
-
