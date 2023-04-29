@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -15,17 +16,9 @@ type versionData struct {
 	releaseDate time.Time
 }
 
-func getReleaseDates(versions []string) []versionData {
-	fmt.Println("Ok")
+var wg = sync.WaitGroup{}
 
-	allData := []versionData{}
-
-	// Put data in the struct
-
-	return allData
-}
-
-// Load the webpage in HTML format
+// Load the webpage in HTML format.
 func fetchVersionPage(webPage string) *goquery.Document {
 	// Request the webpage and get the response.
 	resp, err := http.Get(webPage)
@@ -46,7 +39,6 @@ func fetchVersionPage(webPage string) *goquery.Document {
 	}
 
 	return doc
-
 }
 
 func getValidData(allVersionData []versionData) []versionData {
@@ -66,20 +58,34 @@ func getValidData(allVersionData []versionData) []versionData {
 }
 
 // Get all version numbers from the first page
-// func getVersionNumbers () []string {
+func getVersionNumbers(doc *goquery.Document) []string {
+	// Set a counter.
+	count := 0
+	versions := []string{}
 
-// }
+	// Loop over the versions.
+	for {
+		id := "#dropDownOption_" + strconv.Itoa(count)
+		titleVersionText := doc.Find(id).Text()
+
+		if len(titleVersionText) == 0 {
+			break
+		}
+
+		versions = append(versions, titleVersionText)
+		// fmt.Println(count, titleVersionText)
+
+		count++
+	}
+
+	return versions
+}
 
 // Get first page to get all the version numbers
-// getFirstPage() {
-
-// }
-
-func main() {
+func getFirstPage() *goquery.Document {
 	// URL to get data from.
 	webPage := "https://www.microsoft.com/en-us/wdsi/definitions/antimalware-definition-release-notes"
 
-	// Request the webpage and get the response.
 	resp, err := http.Get(webPage)
 	if err != nil {
 		log.Fatal(err)
@@ -97,38 +103,69 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Set a counter.
-	count := 0
-	versions := []string{}
-	// Loop over the versions.
-	for {
-		id := "#dropDownOption_" + strconv.Itoa(count)
-		titleVersionText := doc.Find(id).Text()
+	return doc
+}
 
-		if len(titleVersionText) == 0 {
-			break
-		}
+func extractReleaseDate(versionDoc *goquery.Document) time.Time {
+	id := "#releaseDate_0"
+	releaseDateStr := versionDoc.Find(id).Text()
 
-		versions = append(versions, titleVersionText)
-		// fmt.Println(count, titleVersionText)
+	releaseDate, _ := time.Parse("1/2/2006 3:04:05 PM", releaseDateStr)
 
-		count++
-	}
+	return releaseDate
+}
 
+func getReleaseDates(version string, c chan versionData) {
+	webPage := "https://www.microsoft.com/en-us/wdsi/definitions/antimalware-definition-release-notes?requestVersion=" + version
+
+	// Function to fetch the data from URL.
+	doc := fetchVersionPage(webPage)
+
+	// Extract the release date in time format from the document.
+	releaseDate := extractReleaseDate(doc)
+
+	var data versionData
+
+	data.releaseDate = releaseDate
+	data.version = version
+
+	// fmt.Println("Before") // DEBUG
+	c <- data
+	// fmt.Println("After") // DEBUG
+
+	wg.Done()
+
+	// fmt.Println("GoRoutine for version:", version) // DEBUG
+}
+
+func main() {
+	// Request the webpage and get the response.
+	doc := getFirstPage()
+
+	// Extract all possible version numbers from the first page.
+	versions := getVersionNumbers(doc)
+	fmt.Println("First Page done.")
+
+	//
 	allVersionData := []versionData{}
+
+	// Channel to communicate all version data in.
+	versionDatach := make(chan versionData, len(versions))
+
+	// Loop over the versions from 1st page to get the release dates and save all the data.
 	for _, version := range versions {
-		webPage := "https://www.microsoft.com/en-us/wdsi/definitions/antimalware-definition-release-notes?requestVersion=" + version
-		versionDoc := fetchVersionPage(webPage)
+		wg.Add(1)
+		go getReleaseDates(version, versionDatach)
+	}
+	// fmt.Println("Versions loop done.") // DEBUG
 
-		id := "#releaseDate_0"
-		releaseDate := versionDoc.Find(id).Text()
+	wg.Wait()
+	close(versionDatach)
 
-		data := versionData{}
+	// fmt.Println("Waiting done.") // DEBUG
 
-		data.version = version
-		data.releaseDate, _ = time.Parse("1/2/2006 3:04:05 PM", releaseDate)
-
-		allVersionData = append(allVersionData, data)
+	for vData := range versionDatach {
+		allVersionData = append(allVersionData, vData)
 	}
 
 	validData := getValidData(allVersionData)
@@ -136,5 +173,5 @@ func main() {
 	for _, data := range validData {
 		fmt.Println(data.version, data.releaseDate)
 	}
-
 }
+
