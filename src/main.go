@@ -54,12 +54,13 @@ func getVersionNumbers(doc *goquery.Document) []string {
 		id := "#dropDownOption_" + strconv.Itoa(count)
 		titleVersionText := doc.Find(id).Text()
 
+		// titleVersionText is empty then page was not found.
 		if len(titleVersionText) == 0 {
 			break
 		}
 
 		versions = append(versions, titleVersionText)
-		// fmt.Println(count, titleVersionText)
+		// fmt.Println(count, titleVersionText) //DEBUG
 
 		count++
 	}
@@ -96,6 +97,7 @@ func extractReleaseDate(versionDoc *goquery.Document) time.Time {
 	id := "#releaseDate_0"
 	releaseDateStr := versionDoc.Find(id).Text()
 
+	// Parse string to time format.
 	releaseDate, _ := time.Parse("1/2/2006 3:04:05 PM", releaseDateStr)
 
 	return releaseDate
@@ -147,9 +149,6 @@ func main() {
 	versions := getVersionNumbers(doc)
 	fmt.Println("First Page done.")
 
-	//
-	// allVersionData := []versionData{}
-
 	// Channel to communicate all version data in.
 	versionDatach := make(chan versionData)
 
@@ -165,15 +164,9 @@ func main() {
 	wg.Wait()
 	close(versionDatach)
 
-	// fmt.Println("Waiting done.") // DEBUG
-
-	/*	for vData := range versionDatach {
-			allVersionData = append(allVersionData, vData)
-		}
-	*/
-	// validData := getValidData(allVersionData)
-
 	for _, data := range validData {
 		fmt.Println(data.version, data.releaseDate)
 	}
+
+	// TODO: Save data to file or send to other service or push to PubSub queue.
 }
