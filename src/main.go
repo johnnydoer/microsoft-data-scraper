@@ -150,6 +150,8 @@ func main() {
 	fmt.Println("First Page done.")
 
 	// Channel to communicate all version data in.
+	// Note unbuffered channel works here because we are also reading concurrently.
+	// If the had first putting all data into a channel and then reading it then we require buffered channel to hold all the inputs.
 	versionDatach := make(chan versionData)
 
 	// Loop over the versions from 1st page to get the release dates and save all the data.
